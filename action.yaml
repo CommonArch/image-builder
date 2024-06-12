@@ -1,0 +1,32 @@
+name: 'Build a CommonArch image'
+description: 'Build a squashfs image compatible with the CommonArch toolkit'
+inputs:
+  working-directory:
+    description: 'Path to image configuration'
+    required: false
+    default: '.'
+  image-filename:
+    description: 'Name (including path if required) of output image file'
+    required: false
+    default: 'image.squashfs'
+runs:
+  using: "composite"
+  steps:
+    - name: Pull build-image.py
+      run: cd "$INPUT_WORKING_DIR"; wget -O build-image.py https://github.com/CommonArch/image-builder/raw/main/build-image.py
+      shell: bash
+      env:
+        INPUT_WORKING_DIR: ${{ inputs.working-directory }}
+
+    - name: Run image build
+      run: cd "$INPUT_WORKING_DIR"; docker run --privileged -i -v /proc:/proc -v ${PWD}:/working_dir -w /working_dir archlinux:latest /bin/bash -c 'pacman -Syu arch-install-scripts base-devel; ./image-build.py'
+      shell: bash
+      env:
+        INPUT_WORKING_DIR: ${{ inputs.working-directory }}
+
+    - name: Copy built image
+      run: mkdir -p "$(dirname "$INPUT_IMAGE_FILENAME")"; cp "${INPUT_WORKING_DIR}"/*.squashfs "$INPUT_IMAGE_FILENAME"
+      shell: bash
+      env:
+        INPUT_WORKING_DIR: ${{ inputs.working-directory }}
+        INPUT_IMAGE_FILENAME: ${{ inputs.image-filename }}
