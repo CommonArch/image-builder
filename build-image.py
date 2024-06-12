@@ -162,16 +162,17 @@ Server = {repo["url"]}
 if image_recipe['pkgbuilds-dir'] != None:
     exec_host(['cp', '-a', '.build/rootfs', '.build/pkg-builder-rootfs'])
     exec_host(['cp', '-a', image_recipe['pkgbuilds-dir'], '.build/pkg-builder-rootfs/pkgbuilds'])
+    exec_host(['mount', '--bind', '.build/pkg-builder-rootfs', '.build/pkg-builder-rootfs'])
 
     # Add a user for package builds
-    exec_host(['systemd-nspawn', '-D', '.build/pkg-builder-rootfs', 'useradd', '-m', '-G', 'wheel', '-s', '/bin/bash', 'aur'])
-    exec_host(['systemd-nspawn', '-D', '.build/pkg-builder-rootfs', 'bash', '-c', 'echo "aur ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/aur'])
+    exec_host(['arch-chroot', '.build/pkg-builder-rootfs', 'useradd', '-m', '-G', 'wheel', '-s', '/bin/bash', 'aur'])
+    exec_host(['arch-chroot', '.build/pkg-builder-rootfs', 'bash', '-c', 'echo "aur ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/aur'])
 
     # Change ownership of pkgbuilds dir
-    exec_host(['systemd-nspawn', '-D', '.build/pkg-builder-rootfs', 'chown', '-R', 'aur', '/pkgbuilds'])
+    exec_host(['arch-chroot', '.build/pkg-builder-rootfs', 'chown', '-R', 'aur', '/pkgbuilds'])
 
     # Install base-devel & git
-    exec_host(['systemd-nspawn', '-D', '.build/pkg-builder-rootfs', 'pacman', '-Sy', '--noconfirm', 'base-devel', 'git'])
+    exec_host(['arch-chroot', '.build/pkg-builder-rootfs', 'pacman', '-Sy', '--noconfirm', 'base-devel', 'git'])
 
     # Create the package repo dir
     exec_host(['mkdir', '.build/rootfs/packages'])
@@ -179,7 +180,7 @@ if image_recipe['pkgbuilds-dir'] != None:
     # Build each package
     built_package_list = []
     for package in os.listdir(image_recipe['pkgbuilds-dir']):
-        exec_host(['systemd-nspawn', '-D', '.build/pkg-builder-rootfs', 'runuser', '-u', 'aur', '--', 'env', '-C', f'/pkgbuilds/{package}',
+        exec_host(['arch-chroot', '.build/pkg-builder-rootfs', 'runuser', '-u', 'aur', '--', 'env', '-C', f'/pkgbuilds/{package}',
                    'makepkg', '-si', '--noconfirm'])
         for built_package in os.listdir(f'.build/pkg-builder-rootfs/pkgbuilds/{package}'):
             if '.pkg.tar.' in built_package:
@@ -197,10 +198,12 @@ SigLevel = Never
 Server = file:///packages
 ''')
 
+exec_host(['mount', '--bind', '.build/rootfs', '.build/rootfs'])
+
 # Install packages from ingredients file
 with open('ingredients.yaml', 'r') as ingredients_file:
     image_ingredients = yaml.safe_load(ingredients_file)
-exec_host(['systemd-nspawn', '-D', '.build/rootfs', 'pacman', '-Sy', '--noconfirm', *image_ingredients['packages']])
+exec_host(['arch-chroot', '.build/rootfs', 'pacman', '-Sy', '--noconfirm', *image_ingredients['packages']])
 
 # Copy back original /etc/pacman.conf
 exec_host(['cp', '.build/pacman.conf', '.build/rootfs/etc/pacman.conf'])
@@ -208,12 +211,14 @@ exec_host(['cp', '.build/pacman.conf', '.build/rootfs/etc/pacman.conf'])
 # Enable services
 if type(image_ingredients.get('services')) == list:
     for service in image_ingredients['services']:
-        exec_host(['systemd-nspawn', '-D', '.build/rootfs', 'systemctl', 'enable', service])
+        exec_host(['arch-chroot', '.build/rootfs', 'systemctl', 'enable', service])
 
 # Enable user services
 if type(image_ingredients.get('user-services')) == list:
     for service in image_ingredients['user-services']:
-        exec_host(['systemd-nspawn', '-D', '.build/rootfs', 'systemctl', 'enable', '--global', service])
+        exec_host(['arch-chroot', '.build/rootfs', 'systemctl', 'enable', '--global', service])
+
+exec_host(['umount', '.build/rootfs'])
 
 # Build image
 exec_host(['rm', '-f', f'{image_recipe["id"]}.squashfs'])
