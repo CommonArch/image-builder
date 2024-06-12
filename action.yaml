@@ -19,7 +19,7 @@ runs:
         INPUT_WORKING_DIR: ${{ inputs.working-directory }}
 
     - name: Run image build
-      run: cd "$INPUT_WORKING_DIR"; docker run --privileged -i -v /proc:/proc -v ${PWD}:/working_dir -w /working_dir archlinux:latest /bin/bash -c 'pacman -Syu arch-install-scripts base-devel; ./build-image.py'
+      run: cd "$INPUT_WORKING_DIR"; docker run --privileged -i -v /proc:/proc -v ${PWD}:/working_dir -w /working_dir archlinux:latest /bin/bash -c 'pacman -Syu --noconfirm arch-install-scripts python base-devel; python3 ./build-image.py'
       shell: bash
       env:
         INPUT_WORKING_DIR: ${{ inputs.working-directory }}
